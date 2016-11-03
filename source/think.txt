@@ -1,0 +1,16 @@
+#think-1
+date；2016/07/21
+下面是一个例程：
+>a,b,c,d=1,2,3,4
+>e=struct.pack("!BBIB",a,b,c,d)
+>f=struct.pack("BBIB",a,b,c,d)
+>len(e)
+>7
+>len(f)
+>9
+>e
+>'\x01\x02\x00\x00\x00\x03\x04'
+>f
+>'\x01\x02\x00\x00\x03\x00\x00\x00\x04'
+
+十分疑惑不解，为什么得到的字节数不一样啊！
