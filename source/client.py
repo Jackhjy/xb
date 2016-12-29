@@ -120,6 +120,7 @@ class Client:
                             task_flag=True
                     else:
                         task_flag=False
+                        self.log.error(u'[deal_task]---------文件为空%s！'%temp_task.get('file',None))
                 else:
                     task_flag=False
                     self.log.error(u'[deal_task]文件不存在！')
@@ -462,22 +463,17 @@ def process_scan_directory(root_path,q_task,q_error):
             while True:
                 #time.sleep(1000)
                 #log.info(u'[process_scan_directory]正在扫描！')
+                
                 scan_files.fresh_filelist()
                 files=scan_files.get_allfiles()
+                print u'Files len is %d'%len(files)
                 #log.info(u'[process_scan_directory]扫描完毕！')
-                time.sleep(10)#这个一定要加，万一行波设备正在写入文件，这里就等待10秒中，等数据完成写入
-                while True:
-                    try:
-                        
-                        if q_task.empty():
-                            i=99
-                            while i:
-                                i=i-1
-                                f_task['file']=files.pop()
-                                q_task.put(f_task)
-                    except Exception,e:
-                        #log.info(u'[process_scan_directory]文件任务已经分配完毕：{}！'.format(e))
-                        break
+                time.sleep(5)#这个一定要加，万一行波设备正在写入文件，这里就等待5秒中，等数据完成写入
+                            
+                while  len(files):
+                    #f_task['file']=files.pop()
+                    if not q_task.full():
+                        q_task.put({'file':files.pop()})                        
             
         else:
             print u'该文件夹不存在，请重新配置！'
@@ -486,7 +482,7 @@ def process_scan_directory(root_path,q_task,q_error):
         print "[process_scan_directory]{}".format(e)
         if not q_error.full():
             q_error.put('c2_restart')#告诉主进程开始重启该程序
-    
+    print u'[process_scan_directory]退出扫描'
 
 def list_alldir(path):
     temp_list=os.listdir(path)
@@ -508,6 +504,9 @@ class Scan_Dir(object):
     def fresh_filelist(self):
         #先搜索出所有的文件夹
         self.dir_list=list_alldir(self.rootpath)
+        #2016-12-28
+        #修复了存在于根文件夹下的文件不能被扫描到的Bug
+        self.dir_list.append(self.rootpath)
         #print u'{}'.format(self.dir_list)
         fd=open(".\\tmp\\dir.txt",'w')
         for temp in self.dir_list:
