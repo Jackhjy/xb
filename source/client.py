@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
 import os,time,glob
-from multiprocessing import Process,Queue
+from multiprocessing import Process,Queue, freeze_support
 import logging
 import logging.config
 import ConfigParser#读取配置文件的库
@@ -33,8 +33,8 @@ class Client:
     def __init__(self,addr,host,port,**kwargs):
         self.sock=None
         self.addr=addr
-        self.host='127.0.0.1'
-        self.port=8837
+        self.host=host
+        self.port=port
         #self.path=data_path
         self.indata=None
         self.oudata=None
@@ -167,8 +167,9 @@ class Client:
             self.sock.connect((self.host,self.port))
             self.make_oudata(CMD.CMAKE_CONNECT)     #制造连接指令
             self.sock.sendall(self.oudata)
+            self.log.error(u"[connect]已连接到主站")
         except Exception,e:
-            self.log.error(u"无法连接主站-错误:{}".format(e))
+            self.log.error(u"[connect]无法连接主站-错误:{}".format(e))
             if not self.queue_error.full():
                 self.log.error(u"[connect]压入重启队列")
                 self.queue_error.put('c1_restart')#告诉主进程开始重启该程序            
@@ -442,8 +443,9 @@ def process_client(host,port,addr,q,root_path):
     log.info(u'[process_client]开始连接主站！')
     c=Client(addr,host,addr,queue_task=q,log=log,root=root_path)
     c.connect()
-    log.info(u'[process_client]已连接到主站！')
+    
     c.run()
+    
 
 #这个进程是扫描文件夹获得数据文件任务的
 #扫描文件策略
@@ -499,9 +501,23 @@ class Scan_Dir(object):
     def __init__(self,dirpath):
         self.rootpath=dirpath
         self.file_list=[]
+        self.file_list1=[]
+        self.file_list2=[]
         self.dir_list=[]
     
     def fresh_filelist(self):
+        self.file_list1=self.scan_files()
+        time.sleep(10)
+        self.file_list2=self.scan_files()
+        for file_item in self.file_list1:
+            if file_item in self.file_list2:
+                self.file_list.append(file_item)
+        fd=open(".\\tmp\\file.txt",'w')
+        for p in self.file_list:
+            fd.write(u'%s\n'%p)
+        fd.close()
+        
+    def scan_files(self):
         #先搜索出所有的文件夹
         self.dir_list=list_alldir(self.rootpath)
         #2016-12-28
@@ -509,22 +525,17 @@ class Scan_Dir(object):
         self.dir_list.append(self.rootpath)
         #print u'{}'.format(self.dir_list)
         fd=open(".\\tmp\\dir.txt",'w')
-        for temp in self.dir_list:
-            
+        for temp in self.dir_list:         
             fd.write(u'%s\n'%temp)
         fd.close()
-        file_list=[]
-        
+        file_list=[]        
         for temp in self.dir_list:
-            s=temp+"\\*.py"
+            s=temp+"\\*.*"
             l=glob.glob(s)
             for temp in l:
-                self.file_list.append(temp)
-        fd=open(".\\tmp\\file.txt",'w')
-        for p in self.file_list:
-            fd.write(u'%s\n'%p)
-        fd.close()
-      
+                file_list.append(temp)                       
+        return file_list
+    
     def get_allfiles(self,**kwargs):
         return self.file_list
         
@@ -539,7 +550,7 @@ if __name__=='__main__':
     queue_error=Queue(2)
     ini_ok=False
     log_ok=False
-    if os.path.exists("xb.ini") and os.path.exists("log.conf"):
+    if os.path.exists("xb.ini") and os.path.exists("clog.conf"):
         #配置文件的读取
         try:
             cf=ConfigParser.ConfigParser()
@@ -577,6 +588,7 @@ if __name__=='__main__':
         if not log_ok and not ini_ok:
             os._exit(0)
         else:#开始进入启动流程
+            freeze_support()
             process1=Process(target=process_client,args=(HOST,PORT,ADDR,[queue_task,queue_error],ROOT_PATH))
             process2=Process(target=process_scan_directory,args=(ROOT_PATH,queue_task,queue_error))
 
